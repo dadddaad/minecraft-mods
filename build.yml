@@ -11,33 +11,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect project
+        id: project
+        shell: bash
+        run: |
+          if find . -type f \( -name 'build.gradle' -o -name 'build.gradle.kts' \) -print -quit | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No Gradle project found; nothing to build."
+          fi
+
       - uses: actions/setup-java@v4
+        if: steps.project.outputs.exists == 'true'
         with:
           distribution: temurin
           java-version: "21"
           cache: gradle
 
       - uses: gradle/actions/setup-gradle@v4
+        if: steps.project.outputs.exists == 'true'
         with:
           gradle-version: "8.11.1"
 
       - name: Find project and build
+        if: steps.project.outputs.exists == 'true'
         shell: bash
         run: |
-          echo "Files received by GitHub:"
-          find . -maxdepth 4 -type f | sort
-
-          PROJECT_DIR="$(dirname "$(find . -name build.gradle -type f | head -n 1)")"
-
-          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
-            PROJECT_DIR="."
+          PROJECT_DIR="$(dirname "$(find . -type f \( -name 'build.gradle' -o -name 'build.gradle.kts' \) -print -quit)")"
+          cd "$PROJECT_DIR"
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew clean build --no-daemon --stacktrace
+          else
+            gradle clean build --no-daemon --stacktrace
           fi
 
-          echo "Project directory: $PROJECT_DIR"
-          cd "$PROJECT_DIR"
-          gradle clean build --no-daemon --stacktrace
-
       - uses: actions/upload-artifact@v4
+        if: steps.project.outputs.exists == 'true'
         with:
           name: df-mob-visualizer
           path: "**/build/libs/*.jar"
